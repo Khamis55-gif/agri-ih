@@ -274,9 +274,11 @@ $('aihQueueExport').addEventListener('click',()=>{const blob=new Blob([JSON.stri
   for(const id of ids){
     const panel=document.getElementById(id);
     if(!panel)continue;
-    const close=document.createElement('button');
+    const existing=Array.from(panel.querySelectorAll('.aih-panel-close'));
+    const close=existing.shift()||document.createElement('button');
+    existing.forEach(button=>button.remove());
     close.type='button';close.className='aih-panel-close';
-    close.textContent='إغلاق';
+    close.textContent=document.documentElement.lang==='en'?'Close':'إغلاق';
     close.addEventListener('click',()=>{
       show(null);
       history.replaceState(null,'',location.pathname+location.search+'#home');
@@ -516,7 +518,7 @@ function sync(){const en=document.documentElement.lang==='en';
 const text={contactInfoTitle:en?'Contact information':'معلومات التواصل',contactInfoText:en?'Official email: contact@agri-ih.org':'البريد الرسمي: contact@agri-ih.org'};
 for(const [key,value] of Object.entries(text))document.querySelectorAll('[data-i18n="'+key+'"]').forEach(el=>el.textContent=value);
 document.querySelectorAll('[data-i18n="contactRights"]').forEach(el=>el.hidden=true);
-document.querySelectorAll('button').forEach(b=>{if(b.dataset.aihCloseLabel==='true'||/^\s*(?:إغلاق(?: المقال)?\s*\/\s*Close(?: article)?|Close\s*\/\s*إغلاق)\s*$/.test(b.textContent)){b.dataset.aihCloseLabel='true';b.textContent=en?'Close':'إغلاق'}});
+document.querySelectorAll('button').forEach(b=>{if(b.matches('.aih-panel-close,.aih-legal-close,.aih-close-article,#aihAuthClose')||b.dataset.aihCloseLabel==='true'||/^\s*(?:إغلاق(?: المقال)?\s*\/\s*Close(?: article)?|Close\s*\/\s*إغلاق)\s*$/.test(b.textContent)){b.dataset.aihCloseLabel='true';b.textContent=en?'Close':'إغلاق'}});
 }
 document.getElementById('language').addEventListener('click',()=>queueMicrotask(sync));
 window.addEventListener('aih:rendered',sync);
