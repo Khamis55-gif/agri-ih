@@ -472,7 +472,34 @@ $('aihAdminCloudNote').textContent='المقالات مرتبطة بقاعدة �
 $('aihForm').onsubmit=async e=>{e.preventDefault();const c=window.AIHCloud;if(!c.admin)return;const msg=$('aihMessage'),submit=$('aihForm').querySelector('[type=submit]');submit.disabled=true;msg.textContent='جارٍ الحفظ…';try{const val=k=>$('aih'+k).value.trim(),id=$('aihId').value,wanted=val('Status');const payload={title_ar:val('TitleAr'),title_en:val('TitleEn'),author_name:input.value.trim(),content_ar:pack(val('BodyAr'),val('SummaryAr'),val('RefsAr')),content_en:pack(val('BodyEn'),val('SummaryEn'),val('RefsEn')),category:val('Category')};if(!payload.title_ar||!payload.author_name)throw Error('أدخل العنوان العربي واسم المؤلف.');let result;if(id){result=await c.client.from('articles').update({...payload,status:wanted,published_at:wanted==='published'?new Date().toISOString():null}).eq('id',id).select('id').single()}else{result=await c.client.from('articles').insert({...payload,author_id:c.user.id,status:'pending',published_at:null}).select('id').single();if(result.error)throw result.error;$('aihId').value=result.data.id;if(wanted!=='pending'){result=await c.client.from('articles').update({status:wanted,published_at:wanted==='published'?new Date().toISOString():null}).eq('id',result.data.id).select('id').single()}}if(result.error)throw result.error;await load();msg.textContent='تم الحفظ في قاعدة البيانات.'}catch(err){msg.textContent='تعذر إكمال الحفظ: '+err.message}finally{submit.disabled=false}};
 // Replace the prototype submission listener so no local success message is emitted.
 const old=$('submissionForm'),form=old.cloneNode(true);old.replaceWith(form);
-form.onsubmit=async e=>{e.preventDefault();const c=window.AIHCloud,msg=$('submissionMessage');if(!c.user){msg.textContent='سجّل الدخول أولاً لإرسال المقال.';return}const send=$('submissionSend');send.disabled=true;try{const result=await c.client.from('articles').insert({title_ar:$('submissionTitle').value.trim(),author_name:$('submissionAuthor').value.trim(),author_id:c.user.id,content_ar:pack($('submissionBody').value,$('submissionAbstract').value,$('submissionRefs').value),status:'pending',published_at:null,category:$('submissionCategory').value});if(result.error)throw result.error;form.reset();msg.textContent='وصل مقالك إلى قاعدة البيانات بانتظار المراجعة العلمية والتحريرية.';await load()}catch(err){msg.textContent='تعذر إرسال المقال: '+err.message}finally{send.disabled=false}};
+function syncSubmissionEmail(){const email=$('submissionEmail');email.value=window.AIHCloud.user?.email||'';email.readOnly=!!window.AIHCloud.user;email.title=document.documentElement.lang==='en'?'Receipt is sent to your account email.':'يُرسل إشعار الاستلام إلى بريد حسابك.'}
+window.addEventListener('aih-auth-change',syncSubmissionEmail);syncSubmissionEmail();
+form.onsubmit=async e=>{
+ e.preventDefault();const c=window.AIHCloud,msg=$('submissionMessage'),en=document.documentElement.lang==='en';
+ if(!c.user){msg.textContent=en?'Sign in before submitting.':'سجّل الدخول أولاً لإرسال المقال.';return}
+ const send=$('submissionSend');send.disabled=true;
+ msg.textContent=en?'Saving your contribution…':'جارٍ حفظ مساهمتك…';
+ try{
+  const result=await c.client.from('articles').insert({title_ar:$('submissionTitle').value.trim(),author_name:$('submissionAuthor').value.trim(),author_id:c.user.id,content_ar:pack($('submissionBody').value,$('submissionAbstract').value,$('submissionRefs').value),status:'pending',published_at:null,category:$('submissionCategory').value}).select('id').single();
+  if(result.error)throw result.error;
+  form.reset();syncSubmissionEmail();
+  const saved=en?'Your contribution was saved and is awaiting scientific and editorial review.':'وصلت مساهمتك إلى قاعدة البيانات بانتظار المراجعة العلمية والتحريرية.';
+  msg.textContent=saved+(en?' Preparing your email receipt…':' جارٍ إرسال إشعار الاستلام…');
+  try{
+   let timer;
+   const receipt=await Promise.race([
+    c.client.functions.invoke('contribution-receipt',{body:{article_id:result.data.id}}),
+    new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Receipt timeout')),30000)})
+   ]).finally(()=>clearTimeout(timer));
+   if(receipt.error||!['sent','sent_record_pending'].includes(receipt.data?.status))throw Error('Receipt not confirmed');
+   msg.textContent=saved+(en?' An email receipt was sent to your account email.':' أُرسل إشعار الاستلام إلى بريد حسابك.');
+  }catch(receiptError){
+   msg.textContent=saved+(en?' Email delivery could not be confirmed. Please do not resubmit your contribution.':' تعذر تأكيد إرسال البريد؛ لا حاجة إلى إعادة إرسال المساهمة.');
+  }
+  load().catch(()=>{});
+ }catch(err){msg.textContent=(en?'Could not save your contribution: ':'تعذر حفظ المساهمة: ')+err.message}
+ finally{send.disabled=false}
+};
 function labels(){ $('submissionSend').textContent='إرسال المقال للمراجعة / Submit for review';$('submitIntro').textContent='تُرسل المساهمات إلى المنصة بعد تسجيل الدخول، وتبقى بانتظار المراجعة العلمية والتحريرية قبل النشر.'}
 $('aihClose').onclick=()=>{$('aihAdmin').classList.add('hidden');paint();location.hash='#scientificArticles';const card=$('aihScientificGrid').querySelector('.aih-article');if(card)card.scrollIntoView({block:'center',behavior:'smooth'})};$('adminOpen').addEventListener('click',()=>setTimeout(paint,0));$('aihExport').onclick=()=>{const a=document.createElement('a'),u=URL.createObjectURL(new Blob([JSON.stringify(rows,null,2)],{type:'application/json'}));a.href=u;a.download='AIH_cloud_articles.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)};window.AIH_renderArticles=paint;window.addEventListener('aih-auth-change',()=>load().catch(e=>{$('aihMessage').textContent=e.message}));new MutationObserver(labels).observe(document.documentElement,{attributes:true,attributeFilter:['lang']});labels();load().catch(()=>{});
 })();
