@@ -449,12 +449,50 @@ document.addEventListener('visibilitychange',()=>root.classList.toggle('aih-news
  if(main){new MutationObserver(()=>{if(document.getElementById('aihNewsTicker')?.nextElementSibling!==document.getElementById('about'))positionNews()}).observe(main,{childList:true});}
 })();</script><script id="aih-contributions-update">(function(){function update(){const en=document.documentElement.lang==='en';document.getElementById('aihContributionsTitle').textContent=en?'Call for contributions':'دعوة للمساهمة';document.getElementById('aihContributionsText').textContent=en?'Agricultural Innovation Hub welcomes ideas, innovations and scientific agricultural articles from its followers. Accepted contributions are published under their authors’ names after scientific and editorial review.':'ترحب منصة الابتكار الزراعي بمساهمات المتابعين من أفكار وابتكارات ومقالات علمية زراعية، وتنشر المساهمات المقبولة بأسماء أصحابها بعد المراجعة العلمية والتحريرية.';const now=new Date(),date=document.getElementById('aihCurrentDate');date.dateTime=[now.getFullYear(),String(now.getMonth()+1).padStart(2,'0'),String(now.getDate()).padStart(2,'0')].join('-');date.textContent=new Intl.DateTimeFormat(en?'en-GB':'ar-IQ',{weekday:'long',year:'numeric',month:'long',day:'numeric',calendar:'gregory'}).format(now)}update();new MutationObserver(update).observe(document.documentElement,{attributes:true,attributeFilter:['lang']});setInterval(update,60000)})();</script><style id="aih-admin-visibility">#adminOpen[hidden]{display:none!important}</style>
 <style>#aihAuth{border:0;border-radius:16px;max-width:420px;width:90%;padding:26px;color:#173d2b}#aihAuth::backdrop{background:#0008}#aihAuth label{display:block;margin-top:14px}#aihAuth input{box-sizing:border-box;width:100%;padding:11px;border:1px solid #abc3b2;border-radius:7px}#aihAuth button{margin-top:14px}#aihAuthStatus{white-space:pre-wrap}#aihAdminCloudNote{padding:14px;background:#fff3cf;color:#593e00}</style>
-<dialog id="aihAuth" dir="rtl"><form id="aihAuthForm"><h2>حساب المنصة / Platform account</h2><label>البريد الإلكتروني / Email<input id="aihAuthEmail" type="email" autocomplete="email" required dir="ltr"></label><label>كلمة المرور / Password<input id="aihAuthPassword" type="password" autocomplete="current-password" minlength="6" required dir="ltr"></label><button class="btn" type="submit">دخول / Sign in</button> <button class="btn outline" id="aihAuthRegister" type="button">إنشاء حساب / Register</button> <button class="btn outline" id="aihAuthClose" type="button">إغلاق / Close</button><p id="aihAuthStatus" role="status"></p></form></dialog>
+<dialog id="aihAuth" dir="rtl"><form id="aihAuthForm"><h2>حساب المنصة / Platform account</h2><label>البريد الإلكتروني / Email<input id="aihAuthEmail" type="email" autocomplete="email" required dir="ltr"></label><label>كلمة المرور / Password<input id="aihAuthPassword" type="password" autocomplete="current-password" minlength="6" required dir="ltr"></label><button class="btn outline" id="aihForgotPassword" type="button">نسيت كلمة المرور؟ / Forgot password?</button><br><button class="btn" type="submit">دخول / Sign in</button> <button class="btn outline" id="aihAuthRegister" type="button">إنشاء حساب / Register</button> <button class="btn outline" id="aihAuthClose" type="button">إغلاق / Close</button><p id="aihAuthStatus" role="status"></p></form></dialog>
+<dialog id="aihRecovery" dir="rtl" aria-labelledby="aihRecoveryTitle" style="border:0;border-radius:16px;max-width:420px;width:90%;padding:26px;color:#173d2b">
+<form id="aihRecoveryForm"><h2 id="aihRecoveryTitle">تعيين كلمة مرور جديدة / Reset password</h2>
+<p>اختر كلمة مرور جديدة لحسابك. / Choose a new password for your account.</p>
+<label for="aihNewPassword">كلمة المرور الجديدة / New password</label>
+<input id="aihNewPassword" type="password" autocomplete="new-password" minlength="8" required dir="ltr" style="width:100%;box-sizing:border-box;padding:11px;margin:10px 0">
+<label for="aihConfirmPassword">تأكيد كلمة المرور / Confirm password</label>
+<input id="aihConfirmPassword" type="password" autocomplete="new-password" minlength="8" required dir="ltr" style="width:100%;box-sizing:border-box;padding:11px;margin:10px 0">
+<p class="small">ثمانية أحرف على الأقل / At least 8 characters</p>
+<button class="btn" id="aihSavePassword" type="submit" disabled>حفظ كلمة المرور / Save password</button>
+<button class="btn outline" id="aihRecoveryClose" type="button">إغلاق / Close</button>
+<p id="aihRecoveryStatus" role="status" aria-live="polite"></p></form></dialog>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.102.0/dist/umd/supabase.js"></script>
 <script id="aih-supabase-auth">
 (function(){
 const $=id=>document.getElementById(id),button=$('adminOpen'),dialog=$('aihAuth');
-button.hidden=true;let client=null,currentUser=null,admin=false;
+button.hidden=true;let client=null,currentUser=null,admin=false,recoveryReady=false;
+const recoveryDialog=$('aihRecovery');
+const recoveryParams=new URLSearchParams(location.hash.slice(1));
+const recoveryLanding=recoveryParams.get('type')==='recovery';
+function showRecovery(ready){recoveryReady=ready;$('aihSavePassword').disabled=!ready;if(dialog.open)dialog.close();if(!recoveryDialog.open)recoveryDialog.showModal();$('aihRecoveryStatus').textContent=ready?'أدخل كلمة المرور الجديدة وأكدها. / Enter and confirm your new password.':'جارٍ التحقق من رابط الاستعادة… / Verifying recovery link…';if(ready)$('aihNewPassword').focus()}
+$('aihForgotPassword').onclick=async()=>{
+ if(!client){message('تعذر تحميل خدمة الدخول. أعد تحميل الصفحة.');return}
+ const email=$('aihAuthEmail');if(!email.reportValidity())return;
+ const control=$('aihForgotPassword');control.disabled=true;message('جارٍ طلب رسالة الاستعادة… / Requesting recovery email…');
+ try{const {error}=await client.auth.resetPasswordForEmail(email.value.trim(),{redirectTo:location.origin+location.pathname});if(error)throw error;message('إذا كان البريد مسجلاً فستصلك رسالة لاستعادة كلمة المرور. افحص الوارد وSpam. / If this address is registered, check your inbox and spam for a recovery email.')}catch(err){message('تعذر طلب الاستعادة / Recovery request failed: '+err.message)}finally{control.disabled=false}
+};
+$('aihRecoveryClose').onclick=()=>{recoveryDialog.close();$('aihRecoveryForm').reset()};
+recoveryDialog.addEventListener('cancel',()=>$('aihRecoveryForm').reset());
+$('aihRecoveryForm').onsubmit=async e=>{
+ e.preventDefault();if(!client||!recoveryReady)return;
+ const password=$('aihNewPassword').value;
+ if(password!==$('aihConfirmPassword').value){$('aihRecoveryStatus').textContent='كلمتا المرور غير متطابقتين. / Passwords do not match.';return}
+ $('aihSavePassword').disabled=true;$('aihRecoveryStatus').textContent='جارٍ الحفظ… / Saving…';
+ try{const {error}=await client.auth.updateUser({password});if(error)throw error;
+ recoveryReady=false;$('aihRecoveryForm').reset();
+ const {error:signOutError}=await client.auth.signOut({scope:'local'});
+ recoveryDialog.close();
+ if(signOutError){await sync();open();message('تم تحديث كلمة المرور. / Password updated.');return}
+ lock();open();message('تم تحديث كلمة المرور بنجاح. سجّل الدخول بكلمة المرور الجديدة. / Password updated. Sign in with your new password.');$('aihAuthPassword').value='';
+ }catch(err){$('aihRecoveryStatus').textContent='تعذر الحفظ / Could not save: '+err.message;$('aihSavePassword').disabled=false}
+};
+if(recoveryLanding)showRecovery(false);
+
 function message(t){$('aihAuthStatus').textContent=t}
 function display(){window.AIHCloud={client,user:currentUser,admin};button.hidden=!admin;button.disabled=!admin;const en=document.documentElement.lang==='en';$('memberButton').textContent=currentUser?(en?'Sign out':'تسجيل الخروج'):(en?'Register / Sign in':'تسجيل / دخول');$('demoNotice').textContent='';$('demoNotice').hidden=true}
 function lock(){currentUser=null;admin=false;member=false;$('aihAdmin').classList.add('hidden');render();display();window.dispatchEvent(new Event('aih-auth-change'))}
@@ -469,7 +507,9 @@ const note=document.createElement('p');note.id='aihAdminCloudNote';note.textCont
 $('aihHomePane').querySelectorAll('button,input,select,textarea').forEach(el=>el.disabled=true);
 document.addEventListener('click',e=>{if(e.target.closest('#adminOpen')&&!admin){e.preventDefault();e.stopImmediatePropagation()}},true);
 new MutationObserver(display).observe(document.documentElement,{attributes:true,attributeFilter:['lang']});
-if(window.supabase){client=window.supabase.createClient('https://ehypshurvtijtpiglrfb.supabase.co','sb_publishable_rNFOB4AO44SemfmqcaStXA_UG1etIOu');client.auth.onAuthStateChange(()=>setTimeout(()=>sync().catch(lock),0));sync().catch(lock)}else lock();
+if(window.supabase){client=window.supabase.createClient('https://ehypshurvtijtpiglrfb.supabase.co','sb_publishable_rNFOB4AO44SemfmqcaStXA_UG1etIOu');client.auth.onAuthStateChange((event,session)=>{if(event==='PASSWORD_RECOVERY'&&session)showRecovery(true);setTimeout(()=>sync().catch(lock),0)});sync().catch(lock);
+if(recoveryLanding)client.auth.getSession().then(({error})=>{if(!recoveryReady){$('aihRecoveryStatus').textContent=error?'الرابط غير صالح أو منتهي. اطلب رسالة استعادة جديدة. / Invalid or expired link. Request a new email.':'تعذر التحقق من رابط الاستعادة. اطلب رسالة جديدة من «نسيت كلمة المرور؟». / Unable to verify this recovery link. Request a new email.'}}).catch(()=>{$('aihRecoveryStatus').textContent='تعذر التحقق من الرابط. أعد المحاولة. / Unable to verify link.'});
+const authError=recoveryParams.get('error_description');if(authError){open();message('رابط الدخول غير صالح أو منتهي. اطلب رسالة جديدة. / Invalid or expired sign-in link. Request a new email.');history.replaceState(null,'',location.pathname+location.search)}}else lock();
 })();</script>
 <script id="aih-cloud-articles">(function(){
 window.AIHCloud=window.AIHCloud||{client:null,user:null,admin:false};const $=id=>document.getElementById(id);let rows=[];const fields=['TitleAr','TitleEn','SummaryAr','SummaryEn','BodyAr','BodyEn','RefsAr','RefsEn','Category','Status'];
