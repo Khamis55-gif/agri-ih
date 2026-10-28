@@ -134,6 +134,7 @@ function renderContent(target,text){
  const lines=String(text||'').split(/\r?\n/);let pending=[];
  function flush(){if(pending.length){for(const part of pending.join('\n').split(/\n\s*\n/)){if(!part.trim())continue;const p=document.createElement('p');p.className='aih-article-paragraph';p.textContent=part.replace(/\s+/g,' ').trim();target.append(p)}pending=[]}}
  for(let i=0;i<lines.length;i++){
+  if(lines[i].startsWith('::aih-media::')&&window.AIHMedia){flush();if(window.AIHMedia.render(target,lines[i]))continue}
   if(lines[i].includes('|')&&i+1<lines.length&&divider(lines[i+1])){
    flush();const headers=cells(lines[i]),wrap=document.createElement('div'),table=document.createElement('table'),head=document.createElement('thead'),body=document.createElement('tbody');table.dir=target.closest('[dir]')?.dir||'rtl';wrap.className='aih-table-wrap';wrap.tabIndex=0;wrap.setAttribute('role','region');wrap.setAttribute('aria-label','جدول المقال / Article table');
    function row(values,header){const tr=document.createElement('tr');for(let c=0;c<headers.length;c++){const cell=document.createElement(header?'th':'td');if(header)cell.scope='col';cell.textContent=values[c]||'';tr.append(cell)}return tr}
@@ -675,4 +676,39 @@ window.AIHWordImport={readDocumentXml,convertXml};
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',setup);else setup();
 })();
 </script>
+<script id="aih-article-media">
+(function(){
+const prefix='::aih-media::';
+function youtubeId(value){try{const u=new URL(value);if(u.protocol!=='https:')return null;const h=u.hostname.toLowerCase();let id;if(h==='youtu.be')id=u.pathname.slice(1);else if(['youtube.com','www.youtube.com','m.youtube.com','www.youtube-nocookie.com'].includes(h)){id=u.pathname==='/watch'?u.searchParams.get('v'):u.pathname.match(/^\/(?:embed|shorts)\/([^/]+)/)?.[1]}return /^[A-Za-z0-9_-]{11}$/.test(id||'')?id:null}catch{return null}}
+function imageUrl(value){try{const u=new URL(value);return u.protocol==='https:'?u.href:null}catch{return null}}
+function render(target,line){if(!line.startsWith(prefix))return false;let data;try{data=JSON.parse(line.slice(prefix.length))}catch{return false}
+ const figure=document.createElement('figure');figure.className='aih-article-media';
+ if(data.type==='image'&&imageUrl(data.url)){const img=document.createElement('img');img.src=imageUrl(data.url);img.alt=data.caption||'صورة المقال';img.loading='lazy';img.referrerPolicy='no-referrer';figure.append(img)}
+ else if(data.type==='youtube'&&youtubeId(data.url)){const frame=document.createElement('iframe');frame.src='https://www.youtube-nocookie.com/embed/'+youtubeId(data.url);frame.title=data.caption||'فيديو المقال';frame.loading='lazy';frame.referrerPolicy='strict-origin-when-cross-origin';frame.allow='encrypted-media; picture-in-picture; fullscreen';frame.allowFullscreen=true;figure.append(frame)}else return false;
+ if(data.caption||data.credit){const caption=document.createElement('figcaption');caption.textContent=[data.caption,data.credit].filter(Boolean).join(' — ');figure.append(caption)}target.append(figure);return true;
+}
+window.AIHMedia={render,youtubeId,imageUrl};
+function setup(){for(const id of ['aihBodyAr','aihBodyEn','submissionBody']){const field=document.getElementById(id);if(!field)continue;
+ const group=document.createElement('fieldset');group.className='aih-media-tools';const legend=document.createElement('legend');legend.textContent='صور وفيديو المقال / Article images and video';group.append(legend);
+ function input(label,type='text'){const wrap=document.createElement('label'),el=document.createElement('input');wrap.textContent=label;el.type=type;wrap.append(el);group.append(wrap);return el}
+ const caption=input('وصف الصورة أو الفيديو / Caption'),credit=input('المصدر أو اسم المصوّر / Credit'),file=input('رفع صورة JPG / PNG / WebP / GIF (حتى 5 MB)','file');file.accept='image/jpeg,image/png,image/webp,image/gif';
+ const image=input('أو رابط صورة HTTPS / Image URL','url'),video=input('رابط فيديو YouTube / YouTube URL','url');
+ // Optional media inputs must not block the article form's native validation.
+ image.removeAttribute('name');video.removeAttribute('name');
+ const status=document.createElement('p');status.setAttribute('role','status');
+ function insert(data){const start=field.selectionStart,end=field.selectionEnd;field.setRangeText('\n\n'+prefix+JSON.stringify({...data,caption:caption.value.trim(),credit:credit.value.trim()})+'\n\n',start,end,'end');field.dispatchEvent(new Event('input',{bubbles:true}));status.textContent='تم الإدراج في نص المقال. احفظ المقال ثم افتحه لمشاهدة الصورة أو الفيديو.'}
+ function button(label,action){const b=document.createElement('button');b.type='button';b.className='btn outline';b.textContent=label;b.onclick=()=>action(b);group.append(b)}
+ button('رفع وإضافة الصورة',async b=>{const c=window.AIHCloud,f=file.files[0];if(!c?.user||!c.client){status.textContent='سجّل الدخول أولاً.';return}if(!f){status.textContent='اختر صورة أولاً.';return}const ext={'image/jpeg':'jpg','image/png':'png','image/webp':'webp','image/gif':'gif'}[f.type];if(!ext||f.size>5*1024*1024){status.textContent='اختر صورة JPG أو PNG أو WebP أو GIF بحجم لا يتجاوز 5 MB.';return}b.disabled=true;status.textContent='جارٍ رفع الصورة…';try{const path=c.user.id+'/'+crypto.randomUUID()+'.'+ext;const {error}=await c.client.storage.from('article-media').upload(path,f,{contentType:f.type,upsert:false});if(error)throw error;const {data}=c.client.storage.from('article-media').getPublicUrl(path);insert({type:'image',url:data.publicUrl});file.value=''}catch(err){status.textContent='تعذر رفع الصورة: '+err.message+' — يلزم تفعيل مساحة article-media وسياسات التخزين في Supabase.'}finally{b.disabled=false}});
+ button('إضافة الصورة بالرابط',()=>{const url=imageUrl(image.value.trim());if(!url){status.textContent='أدخل رابط صورة يبدأ بـ https://';return}insert({type:'image',url});image.value=''});
+ button('إضافة الفيديو',()=>{if(!youtubeId(video.value.trim())){status.textContent='أدخل رابط فيديو YouTube صالحاً.';return}insert({type:'youtube',url:video.value.trim()});video.value=''});
+ group.append(status);field.after(group);
+ const form=field.closest('form');form?.addEventListener('reset',()=>{caption.value='';credit.value='';image.value='';video.value='';file.value='';status.textContent=''});
+}}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',setup);else setup();
+})();
+</script>
+<style id="aih-media-styles">
+.aih-media-tools{border:1px solid #cad8cc;border-radius:12px;padding:14px;margin:12px 0 22px;min-width:0}.aih-media-tools label{display:block;margin:8px 0}.aih-media-tools input{display:block;width:100%;box-sizing:border-box;padding:9px}.aih-media-tools button{margin:8px 0 0 8px}.aih-media-tools p{font-size:14px}
+#aihReaderBody .aih-article-media{margin:22px 0;width:100%;white-space:normal}#aihReaderBody .aih-article-media img{display:block;width:auto;max-width:100%;max-height:650px;height:auto;margin:auto;border-radius:8px}#aihReaderBody .aih-article-media iframe{display:block;width:100%;aspect-ratio:16/9;border:0;border-radius:8px}#aihReaderBody .aih-article-media figcaption{font-size:14px;color:#50685a;text-align:center;margin-top:8px}
+</style>
 </body></html>
