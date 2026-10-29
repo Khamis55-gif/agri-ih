@@ -20,7 +20,7 @@
 </style><style>#areas .aih-featured-grid{margin-top:24px}#areas .aih-featured-card{min-width:0}#areas [hidden]{display:none!important}</style><style>#latestGrid .aih-farm-teaser{display:none!important}</style><style id="aih-contributions-style">#home #founder{display:none!important}.aih-contributions{margin-top:22px;padding:18px 20px;background:#f0f7ef;border-inline-start:4px solid #477647;border-radius:10px;color:#25452e}.hero .aih-contributions h2,.hero .aih-contributions p{color:#25452e!important;opacity:1!important;visibility:visible!important}.aih-contributions h2{font-size:1.2rem;margin:0 0 8px}.aih-contributions p{margin:0;line-height:1.9}.aih-current-date{display:block;margin-top:10px;font-size:.88rem;opacity:.85}</style><style>#aihScientificGrid>[hidden]{display:none!important}</style><style>.aih-digital-badge{display:none!important}</style><style id="aih-news-motion">
 #demoNotice{display:none!important}
 .aih-news-content{display:block;overflow:hidden;position:relative;padding-block:4px}
-.aih-news-track{display:flex;align-items:center;gap:14px;width:max-content;white-space:nowrap;position:relative;left:0;animation:aih-news-left-to-right 25s linear infinite;will-change:transform}
+.aih-news-track{display:flex;align-items:center;gap:14px;width:max-content;white-space:nowrap;position:relative;left:0;animation:aih-news-left-to-right 14s linear infinite;will-change:transform}
 @keyframes aih-news-left-to-right{from{transform:translateX(-100%)}to{transform:translateX(var(--aih-news-end,800px))}}
 .aih-news:hover .aih-news-track,.aih-news:focus-within .aih-news-track,.aih-news-paused .aih-news-track,.aih-news-background .aih-news-track{animation-play-state:paused}
 @media(prefers-reduced-motion:reduce){.aih-news-track{animation:none!important;transform:none;white-space:normal;width:auto;will-change:auto}.aih-news-track span{white-space:normal}}
@@ -556,11 +556,11 @@ const submit=form.querySelector('[type=submit]');
 const confirmLabel=document.createElement('label');
 confirmLabel.textContent='تأكيد كلمة المرور / Confirm password';
 const confirm=document.createElement('input');confirm.type='password';confirm.id='aihRegisterConfirm';confirm.autocomplete='new-password';confirm.dir='ltr';confirmLabel.append(confirm);passwordField.parentElement.after(confirmLabel);
-const help=document.createElement('p');help.className='small';help.textContent='للحساب الموجود اختر دخول. إنشاء حساب لا يغيّر كلمة مرور حساب سابق. / Existing account? Sign in. Registering again does not reset your password.';form.querySelector('h2').after(help);
+const help=document.createElement('p');help.className='small';help.textContent='للتسجيل الجديد: أدخل البريد، ثم كلمة المرور وأكدها، ثم اضغط إنشاء الحساب. لديك حساب؟ اختر دخول. / New account: enter email, password and confirmation, then Create account. Already registered? Choose Sign in.';form.querySelector('h2').after(help);
 const show=document.createElement('button');show.type='button';show.className='btn outline';show.textContent='إظهار كلمة المرور / Show password';confirmLabel.after(show);
 show.onclick=()=>{const visible=passwordField.type==='password';passwordField.type=confirm.type=visible?'text':'password';show.textContent=visible?'إخفاء كلمة المرور / Hide password':'إظهار كلمة المرور / Show password'};
 const resend=document.createElement('button');resend.type='button';resend.className='btn outline';resend.id='aihResendConfirmation';resend.textContent='إعادة إرسال تأكيد البريد / Resend confirmation';$('aihForgotPassword').after(resend);
-function mode(value){registering=value;confirmLabel.hidden=!value;confirm.required=value;confirm.disabled=!value;passwordField.autocomplete=value?'new-password':'current-password';passwordField.minLength=value?8:1;submit.textContent=value?'إنشاء الحساب / Create account':'دخول / Sign in';$('aihAuthRegister').textContent=value?'لدي حساب: دخول / Back to sign in':'إنشاء حساب جديد / Register';confirm.value='';passwordField.value='';passwordField.type=confirm.type='password';show.textContent='إظهار كلمة المرور / Show password';message('')}
+function mode(value){registering=value;confirmLabel.hidden=!value;confirmLabel.style.setProperty('display',value?'block':'none','important');confirm.required=value;confirm.disabled=false;passwordField.autocomplete=value?'new-password':'current-password';passwordField.minLength=value?8:1;submit.textContent=value?'إنشاء الحساب / Create account':'دخول / Sign in';$('aihAuthRegister').textContent=value?'لدي حساب: دخول / Sign in':'إنشاء حساب جديد / Register';form.querySelector('h2').textContent=value?'إنشاء حساب جديد / Create account':'تسجيل الدخول / Sign in';confirm.value='';passwordField.value='';passwordField.type=confirm.type='password';show.textContent='إظهار كلمة المرور / Show password';message('')}
 function controls(){[submit,$('aihAuthRegister'),$('aihForgotPassword'),resend].forEach(b=>b.disabled=authBusy);resend.disabled=authBusy||Date.now()<emailReadyAt;}
 function cooldown(){emailReadyAt=Date.now()+60000;controls();setTimeout(controls,60050)}
 function authProblem(err){
@@ -589,11 +589,11 @@ form.onsubmit=async e=>{
  const credentials={email:$('aihAuthEmail').value.trim(),password:passwordField.value};
  const {data,error}=creating?await client.auth.signUp({...credentials,options:{emailRedirectTo:location.origin+location.pathname}}):await client.auth.signInWithPassword(credentials);
  if(error)throw error;
- if(creating&&!data.session){mode(false);cooldown();message('إذا كان البريد جديداً فافتح أحدث رسالة لتأكيده، ثم ادخل بكلمة المرور التي اخترتها. إذا سجلت سابقاً استخدم كلمة المرور الأصلية أو «نسيت كلمة المرور». / For a new address, confirm the latest email then sign in. For an existing account, use its original password or Forgot password.');return}
+ if(creating&&!data.session){const existing=Array.isArray(data.user?.identities)&&data.user.identities.length===0;mode(false);cooldown();if(existing){message('لم يتم إنشاء حساب جديد. قد يكون البريد مستخدماً سابقاً؛ جرّب دخول أو نسيت كلمة المرور. / No new account was created. Try Sign in or Forgot password for a previously used email.');return}message('تم قبول طلب التسجيل، ولم نتحقق من وصول البريد. افحص الوارد وSpam؛ إن لم تصل رسالة، استخدم إعادة إرسال التأكيد بعد دقيقة. لا تعِد إنشاء الحساب. / Registration request accepted; email delivery is not verified. Check inbox and spam, then use Resend confirmation after a minute if needed. Do not register again.');return}
  passwordField.value='';confirm.value='';await sync();if(currentUser)dialog.close();else message('تم قبول بيانات الدخول لكن تعذر تحميل الحساب. أعد تحميل الصفحة. / Credentials accepted; unable to load account. Reload the page.');
  }catch(err){message(authProblem(err))}finally{authBusy=false;controls()}
 };
-mode(false);
+mode(true);
 // Keep the local editor intact; online writes remain disabled until the table mapping is confirmed.
 const note=document.createElement('p');note.id='aihAdminCloudNote';note.textContent='تم التحقق من حساب المدير. حفظ المقالات وإعدادات الصفحة على الإنترنت لم يُفعّل بعد؛ لا تزال بحاجة إلى ربط قاعدة البيانات.';$('aihAdmin').querySelector('.aih-admin-inner').prepend(note);
 $('aihHomePane').querySelectorAll('button,input,select,textarea').forEach(el=>el.disabled=true);
