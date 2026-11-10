@@ -499,6 +499,15 @@ if(en&&/المزارع\s+العراقي\s+الذكي/.test(a.TitleAr)){
     if(!a[field]?.trim()||/^[^\p{L}]*\p{Script=Arabic}/u.test(a[field])) a[field]=translation;
   }
 }
+if (/المزارع\s+العراقي\s+الذكي/.test(a.TitleAr)) {
+  const field = en ? 'BodyEn' : 'BodyAr';
+  const note = en
+    ? 'The Smart Iraqi Farmer App is a proposal for a digital service for farmers in Iraq. Moving forward would require a local partner and a field team to work with farmers and agricultural extension staff to identify their priorities. Once that partnership is in place, a small pilot at one site could test the usefulness and ease of use of the digital farm record before adding services or expanding to other sites.'
+    : 'يُطرح تطبيق «المزارع العراقي الذكي» بوصفه تصورًا لخدمة المزارعين في العراق. ويتطلب الانتقال إلى التنفيذ شريكًا محليًا وفريقًا ميدانيًا يعمل مع المزارعين والمرشدين الزراعيين لتحديد أولوياتهم. وعند توفر هذه الشراكة، يمكن البدء بتجربة محدودة لسجل المزرعة الرقمي في موقع واحد، وتقييم فائدته وسهولة استخدامه قبل إضافة خدمات أخرى أو التوسع إلى مواقع جديدة.';
+  const body = (a[field] || a.BodyAr || '').trimEnd();
+  if (!body.includes(note)) a[field] = body + '\n\n' + note;
+}
+
 card.append(node('h3',en?(a.TitleEn||a.TitleAr):a.TitleAr),node('p',a.Author),node('p',en?(a.SummaryEn||a.SummaryAr):a.SummaryAr));let b=node('button',en?'Read article':'اقرأ المقال','btn outline');b.onclick=()=>showAIHArticle(en?(a.TitleEn||a.TitleAr):a.TitleAr,en?(a.BodyEn||a.BodyAr):a.BodyAr,en?(a.RefsEn||a.RefsAr):a.RefsAr,en,a.TitleAr.trim()==='مدارس الفلاحين الحقلية'?'bDUs89-UZiA':undefined);card.append(b);const target={digital_agriculture:'aihDigitalArticles',water_climate_mechanization:'aihWaterArticles',plant_animal_production:'aihProductionArticles'}[r.category];if(target)$(target).prepend(card)}
 const list=$('aihSaved');list.replaceChildren();if(!window.AIHCloud.admin)return;for(const r of rows){const a=item(r),row=node('div','','aih-saved-item'),edit=node('button','فتح وتعديل','btn outline');row.append(node('strong',a.TitleAr),node('p',a.Author+' — '+a.Status));edit.type='button';edit.onclick=()=>{try{$('aihArticlePane').hidden=false;$('aihHomePane').hidden=true;$('aihId').value=a.id;fields.forEach(k=>{const el=$('aih'+k);if(el)el.value=a[k]||''});$('aihCloudAuthor').value=a.Author;$('aihMessage').textContent='تم فتح المقال للتعديل: '+a.TitleAr;$('aihAdmin').scrollTo({top:0,behavior:'instant'});$('aihForm').scrollIntoView({block:'start',behavior:'instant'});$('aihTitleAr').focus({preventScroll:true})}catch(err){$('aihMessage').textContent='تعذر فتح المقال: '+err.message;$('aihMessage').scrollIntoView({block:'center'})}};row.append(edit);list.append(row)}}
 async function load(){if(!window.AIHCloud.user){rows=[];paint();return}const {data,error}=await window.AIHCloud.client.from('articles').select('*').order('created_at',{ascending:false});if(error){$('aihMessage').textContent='تعذر تحميل المقالات: '+error.message;return}rows=data;paint()}
