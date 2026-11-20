@@ -167,37 +167,85 @@ window.addEventListener('aih:rendered',()=>{apply();setTimeout(apply,0)});captur
  }catch(error){status.textContent=en?'Unable to confirm submission. Your text has been kept. Please try again or email contact@agri-ih.org.':'تعذر تأكيد الإرسال. احتُفظ بنص رسالتك؛ حاول مجددًا أو راسل contact@agri-ih.org.';}
  finally{button.disabled=false;f.removeAttribute('aria-busy');}
 });update()})();</script>
-<section aria-label="Local prototype visit statistics" id="aihLocalStats" style="max-width:1150px;margin:22px auto;padding:18px;border:1px solid #d8e6dd;border-radius:14px;text-align:center">
-<strong id="aihCounterTitle">إحصاءات المعاينة المحلية</strong>
+<section aria-label="إحصاءات المنصة" id="aihLocalStats" style="max-width:1150px;margin:22px auto;padding:18px;border:1px solid #d8e6dd;border-radius:14px;text-align:center">
+<strong id="aihCounterTitle">إحصاءات المنصة</strong>
 <div style="display:flex;justify-content:center;gap:35px;margin:12px 0;flex-wrap:wrap">
-<div><strong id="aihVisitCount">28</strong><div id="aihVisitLabel">مرات فتح النموذج في هذا المتصفح</div></div>
-<div><strong id="aihVisitorCount">1</strong><div id="aihVisitorLabel">المتصفحون الفريدون المسجلون محلياً</div></div>
-</div><small id="aihCounterNote">عداد تجريبي على هذا الجهاز فقط؛ لا يحصي زوار الموقع الفعليين. يلزم ربط الموقع بخدمة إحصاءات بعد النشر.</small>
+<div><strong id="aihVisitCount">—</strong><div id="aihVisitLabel">إجمالي الزيارات</div></div>
+<div><strong id="aihVisitorCount">—</strong><div id="aihVisitorLabel">الزوار الفريدون (تقريباً)</div></div>
+<div><strong id="aihMemberCount">—</strong><div id="aihMemberLabel">الأعضاء المسجلون والمؤكدون</div></div>
+</div><small id="aihCounterNote" aria-live="polite">جارٍ تحميل الإحصاءات...</small>
+<div style="margin-top:10px"><button type="button" class="btn outline" id="aihStatsOptOut">إيقاف احتساب زيارات هذا المتصفح</button> <button type="button" class="btn outline" id="aihStatsRefresh">تحديث الأرقام</button></div>
 </section>
 <script>
 (function(){
-const prefix='aih_v26_';
-try{
-const visits=Number(localStorage.getItem(prefix+'visits')||0)+1;
-localStorage.setItem(prefix+'visits',String(visits));
-localStorage.setItem(prefix+'visitor','1');
-document.getElementById('aihVisitCount').textContent=visits.toLocaleString();
-document.getElementById('aihVisitorCount').textContent='1';
-}catch(e){
-document.getElementById('aihVisitCount').textContent='—';
-document.getElementById('aihVisitorCount').textContent='—';
-}
-function translate(){
-const en=window.AIH_lang==='en';
-for(const [id,ar,eng] of [
-['aihCounterTitle','إحصاءات المعاينة المحلية','Local preview statistics'],
-['aihVisitLabel','مرات فتح النموذج في هذا المتصفح','Preview opens in this browser'],
-['aihVisitorLabel','المتصفحون الفريدون المسجلون محلياً','Unique browsers counted locally'],
-['aihCounterNote','عداد تجريبي على هذا الجهاز فقط؛ لا يحصي زوار الموقع الفعليين. يلزم ربط الموقع بخدمة إحصاءات بعد النشر.','Demo counter on this device only; it does not count real website visitors. Site-wide analytics require a service after launch.']
-])document.getElementById(id).textContent=en?eng:ar;
-}
-document.getElementById('language').addEventListener('click',translate);
-translate();
+ const $=id=>document.getElementById(id),key='aih_analytics_browser_v1',opt='aih_analytics_optout_v1';
+ let result=null,state='loading',busy=false,recorded=false,retries=0,optedOut=false,pendingRecord=false;
+ try{optedOut=localStorage.getItem(opt)==='1';}catch(e){optedOut=true;}
+ function browserId(){
+  if(optedOut||location.protocol!=='https:')return null;
+  try{
+   let id=localStorage.getItem(key);
+   if(!id||!(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id))){
+    id=crypto.randomUUID();localStorage.setItem(key,id);
+   }
+   return id;
+  }catch(e){return null;}
+ }
+ function translate(){
+  const en=document.documentElement.lang==='en',locale=en?'en-US':'ar-IQ';
+  $('aihLocalStats').setAttribute('aria-label',en?'Platform statistics':'إحصاءات المنصة');
+  for(const [id,ar,eng] of [
+   ['aihCounterTitle','إحصاءات المنصة','Platform statistics'],
+   ['aihVisitLabel','إجمالي الزيارات','Total visits'],
+   ['aihVisitorLabel','الزوار الفريدون (تقريباً)','Unique browsers (approx.)'],
+   ['aihMemberLabel','الأعضاء المسجلون والمؤكدون','Confirmed registered members'],
+   ['aihStatsRefresh','تحديث الأرقام','Refresh figures']
+  ])$(id).textContent=en?eng:ar;
+  $('aihStatsOptOut').textContent=optedOut?(en?'Enable counting for this browser':'تفعيل احتساب زيارات هذا المتصفح'):(en?'Stop counting this browser':'إيقاف احتساب زيارات هذا المتصفح');
+  for(const [id,field] of [['aihVisitCount','visits'],['aihVisitorCount','browsers'],['aihMemberCount','members']]){
+   $(id).textContent=result?Number(result[field]).toLocaleString(locale):'—';
+  }
+  const notes={
+   loading:[ 'جارٍ تحميل الإحصاءات...', 'Loading statistics…' ],
+   ready:[ 'الزيارات منذ تفعيل العداد؛ تُحتسب زيارة جديدة بعد 30 دقيقة على الأقل. الزوار الفريدون تقدير حسب المتصفح وليس الأشخاص؛ العضوية تحصي الحسابات المؤكدة بالبريد منذ إنشاء المنصة.','Visits since activation; a repeat visit counts after at least 30 minutes. Unique browsers estimate devices, not people; membership includes email-confirmed accounts since launch.' ],
+   error:[ 'الإحصاءات غير متاحة حالياً؛ يرجى المحاولة مجدداً.', 'Statistics are currently unavailable; try again.' ]
+  };
+  $('aihCounterNote').textContent=notes[state][en?1:0];
+  $('aihStatsRefresh').disabled=busy;
+ }
+ async function refresh(allowRecord=false){
+  if(busy){pendingRecord=pendingRecord||allowRecord;return;}
+  const client=window.AIHCloud?.client;
+  if(!client){
+   if(retries++<12){setTimeout(()=>refresh(allowRecord),750);return;}
+   state='error';translate();return;
+  }
+  busy=true;translate();
+  const id=allowRecord&&!recorded?browserId():null;
+  try{
+   const {data,error}=await client.rpc('aih_traffic_stats',{p_browser_id:id});
+   if(error||!data||!['visits','browsers','members'].every(k=>Number.isSafeInteger(Number(data[k]))&&data[k]!==null&&data[k]!==undefined&&Number(data[k])>=0))throw new Error('Statistics unavailable');
+   result=data;state='ready';if(id)recorded=true;
+  }catch(e){result=null;state='error';}
+  finally{busy=false;translate();if(pendingRecord){pendingRecord=false;refresh(true);}}
+ }
+ $('aihStatsRefresh').addEventListener('click',()=>refresh(true));
+ $('aihStatsOptOut').addEventListener('click',()=>{
+  const next=!optedOut;
+  try{localStorage.setItem(opt,next?'1':'0');if(next)localStorage.removeItem(key);optedOut=next;}catch(e){optedOut=true;}
+  translate();if(!optedOut){recorded=false;refresh(true);}
+ });
+ window.addEventListener('aih:rendered',translate);
+ window.addEventListener('aih-auth-change',()=>refresh(false));
+ document.addEventListener('DOMContentLoaded',()=>refresh(true),{once:true});
+ const privacy=$('privacyPolicy');
+ if(privacy){
+  for(const [selector,title,copy] of [
+   ['.legal-ar','إحصاءات الزيارات','نستخدم معرفاً عشوائياً محفوظاً في المتصفح لحساب الزيارات والزوار الفريدين تقريبياً. لا يخزن جدول الإحصاءات الأسماء أو البريد الإلكتروني أو عنوان IP، ولا يربط معرف المتصفح بحساب العضو. تُعرض أعداد مجمعة فقط. يمكنك إيقاف الاحتساب من قسم إحصاءات المنصة؛ قد يؤدي حذف بيانات المتصفح إلى احتسابه كمتصفح جديد.'],
+   ['.legal-en','Visit statistics','A random identifier stored in your browser helps estimate visits and unique browsers. The statistics table does not store names, emails or IP addresses or link the browser identifier to a member account. Only aggregate numbers are displayed. You can opt out in Platform statistics; clearing browser storage may cause a browser to be counted again.']
+  ]){const container=privacy.querySelector(selector);if(container){const h=document.createElement('h3'),p=document.createElement('p');h.textContent=title;p.textContent=copy;container.append(h,p);}}
+ }
+ translate();
 })();
 </script><script>(function(){function sync(){const en=window.AIH_lang==='en';document.querySelectorAll('.aih-legal').forEach(p=>{p.querySelector('.legal-ar').hidden=en;p.querySelector('.legal-en').hidden=!en;const title=p.querySelector('h2');title.textContent=title.getAttribute(en?'data-legal-en':'data-legal-ar')});document.getElementById('aihPrivacyLink').textContent=en?'Privacy Policy':'سياسة الخصوصية';document.getElementById('aihTermsLink').textContent=en?'Terms of Use':'شروط الاستخدام';document.getElementById('aihConsentLabel').lastChild.textContent='';document.getElementById('aihConsentLabel').innerHTML='<input id="aihConsent" type="checkbox"/> '+(en?'I agree to the <a href="#termsOfUse">Terms of Use</a> and <a href="#privacyPolicy">Privacy Policy</a>':'أوافق على <a href="#termsOfUse">شروط الاستخدام</a> و<a href="#privacyPolicy">سياسة الخصوصية</a>');}document.getElementById('language').addEventListener('click',sync);sync()})();</script>
 <script>(function(){function updateFarmLanguage(){var en=window.AIH_lang==='en';document.querySelectorAll('#aihFarmRecordArticle .farm-ar').forEach(function(e){e.hidden=en});document.querySelectorAll('#aihFarmRecordArticle .farm-en').forEach(function(e){e.hidden=!en})}document.getElementById('language').addEventListener('click',updateFarmLanguage);updateFarmLanguage()})();</script><script>
